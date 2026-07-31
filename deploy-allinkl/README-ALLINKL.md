@@ -170,8 +170,8 @@ ohne Änderung.
 
 ## Gut zu wissen
 
-- Die Betriebsdaten kommen live von **Google Places**. Pro Suche werden bis zu
-  ~60 Treffer geladen (Limit der Google-Textsuche).
+- Die Betriebsdaten kommen live von **Google Places**. Pro Suche wird **ein**
+  API-Aufruf gemacht (bis zu 20 Treffer) — das schont dein Google-Kontingent.
 - Google Places liefert **keine E-Mail-Adressen** — als Kontakt dient die
   Telefonnummer. Betriebe ohne jeden Kontakt werden ausgeblendet.
 - **Kosten:** Jede Suche verursacht Google-API-Kosten (im Rahmen deines

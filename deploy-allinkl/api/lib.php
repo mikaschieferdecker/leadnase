@@ -25,7 +25,9 @@ function getApiKey(): ?string {
 
 // Sucht Betriebe über die Google Places Text Search (New).
 // Gibt die zusammengeführte Liste der "places"-Objekte zurück (max. $maxPages × 20).
-function searchGooglePlaces(string $apiKey, string $textQuery, int $maxPages = 3): array {
+// $maxPages = 1 -> nur ein API-Aufruf (bis zu 20 Treffer), um das Google-Kontingent
+// zu schonen. Höher setzen (je +20 Treffer) kostet je Seite einen weiteren Aufruf.
+function searchGooglePlaces(string $apiKey, string $textQuery, int $maxPages = 1): array {
     $endpoint = 'https://places.googleapis.com/v1/places:searchText';
     $fieldMask = implode(',', [
         'places.id',

@@ -43,8 +43,10 @@ export function getApiKey() {
   return key && key.trim() !== '' ? key.trim() : null;
 }
 
-// Sucht Betriebe über die Google Places Text Search (New), inkl. Paginierung.
-async function searchGooglePlaces(apiKey, textQuery, maxPages = 3) {
+// Sucht Betriebe über die Google Places Text Search (New).
+// maxPages = 1 -> nur ein API-Aufruf (bis zu 20 Treffer), um das Google-Kontingent
+// zu schonen. Höher setzen (je +20 Treffer) kostet je Seite einen weiteren Aufruf.
+async function searchGooglePlaces(apiKey, textQuery, maxPages = 1) {
   const all = [];
   let pageToken = null;
 

@@ -61,7 +61,9 @@ leadnase/
 - **Abdeckung:** Google Places hat sehr gute Daten, ist aber ebenfalls nicht
   lückenlos. „Keine Webseite bei Google" ist ein starker Hinweis — prüfe die
   Leads vor der Ansprache trotzdem kurz.
-- **Ergebnis-Limit:** Die Google-Textsuche liefert bis zu ~60 Treffer pro Suche.
+- **Ergebnis-Limit:** Pro Suche wird ein API-Aufruf gemacht (bis zu 20 Treffer),
+  um das Google-Kontingent zu schonen. Über den Parameter `maxPages` in
+  `searchGooglePlaces` lässt sich das erhöhen (je Seite +20 Treffer, +1 Aufruf).
 - **Keine E-Mails:** Google Places gibt keine E-Mail-Adressen zurück; als Kontakt
   dient die Telefonnummer.
 - **Webseiten-Prüfung** ist absichtlich begrenzt (Timeout 8 s, max. 10 parallel),
