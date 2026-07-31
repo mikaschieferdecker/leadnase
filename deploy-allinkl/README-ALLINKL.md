@@ -27,6 +27,54 @@ api/
 
 Die Datei `README-ALLINKL.md` (diese hier) musst du **nicht** hochladen.
 
+## Automatischer Upload per GitHub Actions (empfohlen)
+
+Damit die Dateien **bei jeder Änderung von selbst** auf All-Inkl hochgeladen
+werden, ist ein fertiger Workflow eingerichtet:
+`.github/workflows/deploy-allinkl.yml`. Du musst nur einmal deine
+FTP-Zugangsdaten als „Secrets" hinterlegen — sie landen **nicht** im Code.
+
+### Einmalig einrichten
+
+1. **FTP-Zugang bei All-Inkl anlegen** (im KAS: Menü **FTP** → **FTP-Zugang anlegen**).
+   Wichtig: Den Zugang **direkt auf das Verzeichnis deiner Domain** zeigen lassen.
+   Notiere dir **Host** (z. B. `wNNN.kasserver.com`), **Benutzer** und **Passwort**.
+
+2. **Secrets im GitHub-Repository hinterlegen**
+   Repo öffnen → **Settings** → **Secrets and variables** → **Actions** →
+   Reiter **Secrets** → **New repository secret**. Lege drei Secrets an:
+
+   | Name           | Wert                                             |
+   |----------------|--------------------------------------------------|
+   | `FTP_SERVER`   | FTP-Host, z. B. `wNNN.kasserver.com`             |
+   | `FTP_USERNAME` | dein FTP-Benutzername                            |
+   | `FTP_PASSWORD` | dein FTP-Passwort                                |
+
+3. **(Optional) Zielordner festlegen**
+   Nur nötig, wenn der FTP-Zugang **nicht** direkt in der Domain landet.
+   Reiter **Variables** → **New repository variable**:
+   `FTP_SERVER_DIR` = Zielordner **mit Schrägstrich am Ende**, z. B. `/leads/`.
+   Ohne diese Variable wird ins Login-Verzeichnis (`./`) geladen.
+
+### Ab dann läuft es automatisch
+
+- Jeder Push, der etwas in `deploy-allinkl/` ändert, lädt automatisch hoch.
+- Manuell auslösen: Repo → **Actions** → **Deploy zu All-Inkl (FTP)** →
+  **Run workflow**.
+- Es werden nur geänderte Dateien übertragen (schneller Sync). Bestehende
+  Dateien, die nicht zum Projekt gehören, werden **nicht** gelöscht.
+
+> Läuft der Upload auf einen TLS-/Zertifikatsfehler, in der Workflow-Datei
+> `protocol: ftps` testweise auf `protocol: ftp` ändern (unverschlüsselt) oder
+> `protocol: ftps-legacy` probieren.
+
+---
+
+## Manueller Upload (Alternative)
+
+Wenn du lieber ohne GitHub Actions arbeitest, kannst du die Dateien auch von
+Hand hochladen:
+
 ## Schritt für Schritt
 
 ### 1. Domain auf PHP 8 stellen (einmalig)

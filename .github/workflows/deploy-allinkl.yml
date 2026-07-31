@@ -1,0 +1,62 @@
+name: Deploy zu All-Inkl (FTP)
+
+# Lädt den Inhalt von deploy-allinkl/ automatisch per FTP auf den
+# All-Inkl-Webspace hoch — bei jedem Push und auf Knopfdruck.
+#
+# Voraussetzung: Im Repository müssen diese Secrets gesetzt sein
+# (Settings → Secrets and variables → Actions):
+#   FTP_SERVER    z. B. wNNN.kasserver.com  (FTP-Host aus dem All-Inkl KAS)
+#   FTP_USERNAME  FTP-Benutzername
+#   FTP_PASSWORD  FTP-Passwort
+# Optional als Variable (nicht Secret):
+#   FTP_SERVER_DIR  Zielordner auf dem Server, MIT Schrägstrich am Ende,
+#                   z. B. "/" oder "/leads/". Standard: "./" (Login-Verzeichnis)
+
+on:
+  push:
+    branches:
+      - claude/lead-finder-filter-website-mlmiu8
+      - main
+    paths:
+      - 'deploy-allinkl/**'
+      - '.github/workflows/deploy-allinkl.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: allinkl-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: FTP-Secrets prüfen
+        id: check
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        run: |
+          if [ -z "$FTP_SERVER" ]; then
+            echo "::warning::FTP-Secrets fehlen (FTP_SERVER/FTP_USERNAME/FTP_PASSWORD). Deployment wird übersprungen. Bitte im Repo unter Settings → Secrets and variables → Actions anlegen."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Per FTP zu All-Inkl hochladen
+        if: steps.check.outputs.ready == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          local-dir: ./deploy-allinkl/
+          server-dir: ${{ vars.FTP_SERVER_DIR || './' }}
+          exclude: |
+            **/README-ALLINKL.md
+            **/.git*
+            **/.git*/**
