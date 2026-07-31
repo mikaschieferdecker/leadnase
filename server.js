@@ -237,6 +237,9 @@ app.post('/api/leads', async (req, res) => {
       filtered = leads.filter((l) => !l.hasWebsite || l.websiteStatus === 'broken');
     }
 
+    // Nur Leads mit Kontaktmöglichkeit (Telefon oder E-Mail) behalten.
+    filtered = filtered.filter((l) => l.phone || l.email);
+
     // Alphabetisch sortieren.
     filtered.sort((a, b) => a.name.localeCompare(b.name, 'de'));
 

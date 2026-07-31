@@ -100,6 +100,8 @@ try {
     } else {
         $out = array_filter($leads, fn($l) => !$l['hasWebsite'] || $l['websiteStatus'] === 'broken');
     }
+    // Nur Leads mit Kontaktmöglichkeit (Telefon oder E-Mail) behalten.
+    $out = array_filter($out, fn($l) => $l['phone'] !== '' || $l['email'] !== '');
     $out = array_values($out);
 
     usort($out, fn($a, $b) => strnatcasecmp($a['name'], $b['name']));

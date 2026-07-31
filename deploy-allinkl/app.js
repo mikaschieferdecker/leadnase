@@ -150,7 +150,7 @@ function renderResults(data) {
 
   if (leads.length === 0) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="5" class="muted">Keine passenden Betriebe gefunden. Versuche eine andere Stadt, Branche oder einen anderen Filter.</td>`;
+    tr.innerHTML = `<td colspan="6" class="muted">Keine passenden Betriebe gefunden. Versuche eine andere Stadt, Branche oder einen anderen Filter.</td>`;
     els.tbody.appendChild(tr);
     return;
   }
@@ -169,6 +169,7 @@ function renderResults(data) {
       <td><strong>${escapeHtml(lead.name)}</strong></td>
       <td class="muted">${escapeHtml(lead.address) || '—'}</td>
       <td>${lead.phone ? `<a href="tel:${escapeHtml(lead.phone.replace(/\s/g, ''))}">${escapeHtml(lead.phone)}</a>` : '<span class="muted">—</span>'}</td>
+      <td>${lead.email ? `<a href="mailto:${escapeHtml(lead.email)}">${escapeHtml(lead.email)}</a>` : '<span class="muted">—</span>'}</td>
       <td>${websiteCell}</td>
       <td>${lead.mapsUrl ? `<a href="${escapeHtml(lead.mapsUrl)}" target="_blank" rel="noopener">Karte</a>` : ''}</td>
     `;
