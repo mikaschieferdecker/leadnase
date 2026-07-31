@@ -3,3 +3,7 @@ npm-debug.log*
 .DS_Store
 .env
 *.log
+
+# API-Schlüssel niemals committen
+config.php
+deploy-allinkl/api/config.php

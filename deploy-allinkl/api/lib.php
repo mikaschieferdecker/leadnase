@@ -1,45 +1,70 @@
 <?php
 // leadnase — gemeinsame Funktionen für das PHP-Backend.
+// Datenquelle: Google Places API (New), Endpunkt "Text Search".
 // Enthält nur Funktionsdefinitionen (kein Seiteneffekt), damit die Logik
 // auch automatisiert getestet werden kann.
 
 declare(strict_types=1);
 
-function escapeOverpass(string $value): string {
-    // Backslashes und Anführungszeichen maskieren, damit die Abfrage nicht bricht.
-    return str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
-}
-
-function buildOverpassQuery(string $state, string $city, array $filters): string {
-    $s = escapeOverpass($state);
-    $c = escapeOverpass($city);
-
-    $lines = [];
-    foreach ($filters as $f) {
-        $lines[] = "  nwr{$f}(area.state)(area.city);";
+// Liefert den Google-Places-API-Schlüssel aus der Umgebungsvariable
+// GOOGLE_PLACES_API_KEY oder aus api/config.php (return ['google_places_api_key' => '…']).
+function getApiKey(): ?string {
+    $env = getenv('GOOGLE_PLACES_API_KEY');
+    if (is_string($env) && $env !== '') {
+        return $env;
     }
-    $body = implode("\n", $lines);
-
-    return "[out:json][timeout:120];\n"
-        . "area[\"name\"=\"{$s}\"][\"boundary\"=\"administrative\"][\"admin_level\"=\"4\"]->.state;\n"
-        . "area[\"name\"=\"{$c}\"][\"boundary\"=\"administrative\"]->.city;\n"
-        . "(\n{$body}\n);\n"
-        . "out center tags;";
+    $cfgPath = __DIR__ . '/config.php';
+    if (is_file($cfgPath)) {
+        $cfg = include $cfgPath;
+        if (is_array($cfg) && !empty($cfg['google_places_api_key'])) {
+            return (string) $cfg['google_places_api_key'];
+        }
+    }
+    return null;
 }
 
-function runOverpass(array $endpoints, string $query): array {
-    $lastError = '';
-    foreach ($endpoints as $endpoint) {
+// Sucht Betriebe über die Google Places Text Search (New).
+// Gibt die zusammengeführte Liste der "places"-Objekte zurück (max. $maxPages × 20).
+function searchGooglePlaces(string $apiKey, string $textQuery, int $maxPages = 3): array {
+    $endpoint = 'https://places.googleapis.com/v1/places:searchText';
+    $fieldMask = implode(',', [
+        'places.id',
+        'places.displayName',
+        'places.formattedAddress',
+        'places.nationalPhoneNumber',
+        'places.internationalPhoneNumber',
+        'places.websiteUri',
+        'places.location',
+        'nextPageToken',
+    ]);
+
+    $all = [];
+    $pageToken = null;
+
+    for ($page = 0; $page < $maxPages; $page++) {
+        $payload = [
+            'textQuery'    => $textQuery,
+            'languageCode' => 'de',
+            'regionCode'   => 'DE',
+            'pageSize'     => 20,
+        ];
+        if ($pageToken !== null && $pageToken !== '') {
+            $payload['pageToken'] = $pageToken;
+        }
+
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL            => $endpoint,
             CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => 'data=' . rawurlencode($query),
+            CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 130,
+            CURLOPT_TIMEOUT        => 30,
             CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_USERAGENT      => 'leadnase/1.0 (lead finder tool)',
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'X-Goog-Api-Key: ' . $apiKey,
+                'X-Goog-FieldMask: ' . $fieldMask,
+            ],
         ]);
         $body  = curl_exec($ch);
         $errno = curl_errno($ch);
@@ -47,78 +72,73 @@ function runOverpass(array $endpoints, string $query): array {
         curl_close($ch);
 
         if ($errno !== 0) {
-            $lastError = 'Netzwerkfehler: ' . curl_strerror($errno);
-            continue;
-        }
-        if ($code >= 400) {
-            $lastError = "Overpass {$endpoint} antwortete mit HTTP {$code}";
-            continue;
+            throw new RuntimeException('Netzwerkfehler bei Google Places: ' . curl_strerror($errno));
         }
         $json = json_decode((string) $body, true);
+        if ($code >= 400) {
+            $msg = is_array($json) ? ($json['error']['message'] ?? "HTTP {$code}") : "HTTP {$code}";
+            throw new RuntimeException('Google Places: ' . $msg);
+        }
         if (!is_array($json)) {
-            $lastError = 'Ungültige Antwort von Overpass';
-            continue;
+            throw new RuntimeException('Ungültige Antwort von Google Places');
         }
-        return $json;
-    }
-    throw new RuntimeException($lastError !== '' ? $lastError : 'Alle Overpass-Endpunkte nicht erreichbar');
-}
 
-function buildAddress(array $tags): string {
-    $street = trim(($tags['addr:street'] ?? '') . ' ' . ($tags['addr:housenumber'] ?? ''));
-    $cityLine = trim(($tags['addr:postcode'] ?? '') . ' ' . ($tags['addr:city'] ?? ''));
-    $parts = array_filter([$street, $cityLine], fn($x) => $x !== '');
-    return implode(', ', $parts);
-}
+        foreach (($json['places'] ?? []) as $p) {
+            $all[] = $p;
+        }
 
-function firstTag(array $tags, array $keys): string {
-    foreach ($keys as $k) {
-        if (!empty($tags[$k])) {
-            return (string) $tags[$k];
+        $pageToken = $json['nextPageToken'] ?? null;
+        if ($pageToken === null || $pageToken === '') {
+            break;
         }
     }
-    return '';
+
+    return $all;
 }
 
-function extractLeads(array $overpassJson): array {
+// Entfernt ein abschließendes ", Deutschland" / ", Germany" aus der Adresse.
+function cleanAddress(string $addr): string {
+    return preg_replace('/,\s*(Deutschland|Germany)\s*$/u', '', $addr) ?? $addr;
+}
+
+// Wandelt die Google-Places-Objekte in einheitliche Lead-Datensätze um.
+function extractLeads(array $places): array {
     $seen = [];
     $leads = [];
 
-    foreach (($overpassJson['elements'] ?? []) as $el) {
-        $tags = $el['tags'] ?? [];
-        $name = firstTag($tags, ['name', 'brand', 'operator']);
+    foreach ($places as $p) {
+        $name = $p['displayName']['text'] ?? '';
         if ($name === '') {
-            continue; // Ohne Namen ist ein Lead nicht brauchbar.
+            continue;
         }
 
-        $address = buildAddress($tags);
+        $address = cleanAddress((string) ($p['formattedAddress'] ?? ''));
         $key = mb_strtolower($name . '|' . $address);
         if (isset($seen[$key])) {
             continue; // Duplikat.
         }
         $seen[$key] = true;
 
-        $website = firstTag($tags, ['website', 'contact:website', 'url', 'contact:url']);
-        $phone   = firstTag($tags, ['phone', 'contact:phone', 'contact:mobile']);
-        $email   = firstTag($tags, ['email', 'contact:email']);
-
-        $lat = $el['lat'] ?? ($el['center']['lat'] ?? null);
-        $lon = $el['lon'] ?? ($el['center']['lon'] ?? null);
+        $phone   = $p['nationalPhoneNumber'] ?? ($p['internationalPhoneNumber'] ?? '');
+        $website = $p['websiteUri'] ?? '';
+        $lat     = $p['location']['latitude'] ?? null;
+        $lon     = $p['location']['longitude'] ?? null;
+        $id      = (string) ($p['id'] ?? '');
 
         $leads[] = [
             'name'          => $name,
             'address'       => $address,
-            'phone'         => $phone,
-            'email'         => $email,
-            'website'       => $website,
+            'phone'         => (string) $phone,
+            'email'         => '', // Google Places liefert keine E-Mail-Adressen.
+            'website'       => (string) $website,
             'hasWebsite'    => $website !== '',
             'websiteStatus' => $website !== '' ? 'unknown' : 'none',
             'websiteReason' => null,
             'websiteCode'   => null,
             'lat'           => $lat,
             'lon'           => $lon,
-            'mapsUrl'       => ($lat !== null && $lon !== null)
-                ? "https://www.openstreetmap.org/?mlat={$lat}&mlon={$lon}#map=19/{$lat}/{$lon}"
+            'mapsUrl'       => $id !== ''
+                ? 'https://www.google.com/maps/place/?q=place_id:' . rawurlencode($id)
                 : '',
         ];
     }

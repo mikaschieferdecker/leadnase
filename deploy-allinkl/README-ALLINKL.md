@@ -8,6 +8,31 @@ Kein Node.js, kein npm. Du lädst nur ein paar Dateien per FTP hoch.
 - Ein All-Inkl-Paket mit einer Domain (oder Subdomain).
 - **PHP 8.x** für die Domain aktiviert (Standard bei All-Inkl; siehe unten).
 - Die **cURL**-Erweiterung – bei All-Inkl standardmäßig an, du musst nichts tun.
+- Ein **Google-Places-API-Schlüssel** (siehe nächster Abschnitt).
+
+## Google-Places-API-Schlüssel besorgen (einmalig)
+
+Die Betriebsdaten kommen von Google Places. Dafür brauchst du einen Schlüssel:
+
+1. Google Cloud Console öffnen: <https://console.cloud.google.com>
+   (die Willkommens-Umfrage kannst du mit „Vorerst überspringen" überspringen).
+2. Oben ein **Projekt anlegen** (z. B. „leadnase").
+3. **Abrechnung aktivieren** (Menü **Abrechnung** → Zahlungsmethode hinterlegen).
+   Google hat ein großzügiges monatliches Gratis-Guthaben; ohne Abrechnung
+   liefert die API aber keine Daten.
+4. Die API aktivieren: Menü **APIs & Dienste → Bibliothek** → nach
+   **„Places API (New)"** suchen → **Aktivieren**.
+5. Schlüssel erstellen: **APIs & Dienste → Anmeldedaten** →
+   **Anmeldedaten erstellen → API-Schlüssel**. Den Schlüssel kopieren.
+6. Empfohlen: Beim Schlüssel unter **API-Einschränkungen** nur die
+   **Places API (New)** erlauben und ein **Budget/Kontingent** setzen, damit
+   keine unerwarteten Kosten entstehen.
+
+Diesen Schlüssel hinterlegst du gleich als Secret (automatischer Upload) oder
+in einer `config.php` (manueller Upload) — **nie** direkt im Code.
+
+> Hinweis: Google Places liefert **keine E-Mail-Adressen**. Als Kontaktweg
+> dient dann die Telefonnummer (Betriebe ganz ohne Kontakt werden ausgeblendet).
 
 ## Diese Dateien werden hochgeladen
 
@@ -23,9 +48,12 @@ industries.json     ← Branchen
 api/
   leads.php         ← Backend: Lead-Suche
   lib.php           ← gemeinsame Funktionen (wird von leads.php eingebunden)
+  config.php        ← dein Google-API-Schlüssel (siehe unten; NICHT im Repo)
 ```
 
-Die Datei `README-ALLINKL.md` (diese hier) musst du **nicht** hochladen.
+Die Dateien `README-ALLINKL.md` und `api/config.sample.php` musst du **nicht**
+hochladen. Beim automatischen Upload wird `api/config.php` aus dem Secret
+erzeugt — beim manuellen Upload legst du sie selbst an (siehe unten).
 
 ## Automatischer Upload per GitHub Actions (empfohlen)
 
@@ -44,11 +72,16 @@ FTP-Zugangsdaten als „Secrets" hinterlegen — sie landen **nicht** im Code.
    Repo öffnen → **Settings** → **Secrets and variables** → **Actions** →
    Reiter **Secrets** → **New repository secret**. Lege drei Secrets an:
 
-   | Name           | Wert                                             |
-   |----------------|--------------------------------------------------|
-   | `FTP_SERVER`   | FTP-Host, z. B. `wNNN.kasserver.com`             |
-   | `FTP_USERNAME` | dein FTP-Benutzername                            |
-   | `FTP_PASSWORD` | dein FTP-Passwort                                |
+   | Name                     | Wert                                     |
+   |--------------------------|------------------------------------------|
+   | `FTP_SERVER`             | FTP-Host, z. B. `wNNN.kasserver.com`     |
+   | `FTP_USERNAME`           | dein FTP-Benutzername                    |
+   | `FTP_PASSWORD`           | dein FTP-Passwort                        |
+   | `GOOGLE_PLACES_API_KEY`  | dein Google-Places-API-Schlüssel         |
+
+   Der Workflow schreibt aus `GOOGLE_PLACES_API_KEY` automatisch die Datei
+   `api/config.php` und lädt sie mit hoch — du musst dich um den Schlüssel auf
+   dem Server nicht kümmern.
 
 3. **(Optional) Zielordner festlegen**
    Nur nötig, wenn der FTP-Zugang **nicht** direkt in der Domain landet.
@@ -98,7 +131,12 @@ Zwei Wege — nimm den, der dir leichter fällt:
 3. Links (dein PC) den Inhalt von `deploy-allinkl/` markieren, rechts in den
    Domain-Ordner ziehen. Die Struktur (inkl. Unterordner `api/`) bleibt erhalten.
 
-### 3. Aufrufen
+### 3. API-Schlüssel als config.php anlegen
+1. Datei `api/config.sample.php` zu `api/config.php` kopieren.
+2. Darin den Platzhalter durch deinen echten Google-Places-API-Schlüssel ersetzen.
+3. `api/config.php` in den Ordner `api/` auf dem Server hochladen.
+
+### 4. Aufrufen
 Deine Domain im Browser öffnen, z. B. `https://deine-domain.de`.
 Du solltest die Leadnase-Oberfläche sehen. Bundesland → Stadt → Branche → Filter
 wählen und **„Leads finden"** klicken.
@@ -112,9 +150,15 @@ ohne Änderung.
 
 ## Fehlersuche
 
+- **Fehler „Google-Places-API-Schlüssel fehlt"**
+  Beim automatischen Upload das Secret `GOOGLE_PLACES_API_KEY` setzen; beim
+  manuellen Upload `api/config.php` anlegen (siehe oben).
+- **Fehler mit „API key not valid", „billing", „PERMISSION_DENIED" o. ä.**
+  Kommt direkt von Google: prüfe, ob **Places API (New)** aktiviert, die
+  **Abrechnung** eingerichtet und der Schlüssel korrekt ist.
 - **Seite lädt, aber „Leads finden" bringt einen Fehler**
-  Meist ist die Overpass-Abfrage kurz überlastet — einfach nochmal probieren.
-  Bei dauerhaftem Fehler prüfe, ob PHP auf 8.x steht und cURL aktiv ist.
+  Einfach nochmal probieren. Bei dauerhaftem Fehler prüfe, ob PHP auf 8.x steht
+  und cURL aktiv ist.
 - **Statt der Seite wird PHP-Quelltext angezeigt**
   Dann ist PHP für die Domain nicht aktiv (Schritt 1 nachholen).
 - **„Branchen werden geladen…" bleibt stehen**
@@ -126,9 +170,12 @@ ohne Änderung.
 
 ## Gut zu wissen
 
-- Die Betriebsdaten kommen live aus **OpenStreetMap** (Overpass API), kostenlos
-  und ohne API-Key. Sie sind nur so vollständig wie OSM — ein starker Hinweis,
-  aber vor der Kundenansprache kurz gegenprüfen.
-- OpenStreetMap-Daten stehen unter der
-  [ODbL](https://www.openstreetmap.org/copyright); bei Weiterverwendung bitte
-  entsprechend attribuieren.
+- Die Betriebsdaten kommen live von **Google Places**. Pro Suche werden bis zu
+  ~60 Treffer geladen (Limit der Google-Textsuche).
+- Google Places liefert **keine E-Mail-Adressen** — als Kontakt dient die
+  Telefonnummer. Betriebe ohne jeden Kontakt werden ausgeblendet.
+- **Kosten:** Jede Suche verursacht Google-API-Kosten (im Rahmen deines
+  Kontingents/Budgets). Setze in der Google Cloud Console ein Budget/Limit.
+- **Nutzungsbedingungen:** Google beschränkt das dauerhafte Speichern von
+  Places-Daten und deren Nutzung für Lead-Listen. Prüfe vor kommerzieller
+  Nutzung die [Google Maps Platform Terms](https://cloud.google.com/maps-platform/terms).

@@ -1,11 +1,13 @@
 <?php
 // leadnase — Lead-Suche (PHP-Backend für All-Inkl & andere PHP-Hoster)
 //
+// Datenquelle: Google Places API (New).
 // Erwartet einen POST mit JSON-Body: { state, city, industryId, filter }
 // Antwortet mit JSON: { meta: {...}, leads: [...] }
 //
 // Es werden keine externen Bibliotheken benötigt — nur PHP mit der
-// cURL-Erweiterung (auf All-Inkl standardmäßig aktiv).
+// cURL-Erweiterung (auf All-Inkl standardmäßig aktiv). Der Google-API-Schlüssel
+// wird über die Umgebungsvariable GOOGLE_PLACES_API_KEY oder api/config.php geladen.
 
 declare(strict_types=1);
 
@@ -14,12 +16,6 @@ require __DIR__ . '/lib.php';
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 @set_time_limit(300);
-
-$OVERPASS_ENDPOINTS = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-];
 
 function respond(int $code, array $payload): void {
     http_response_code($code);
@@ -74,16 +70,21 @@ foreach (($industriesDoc['industries'] ?? []) as $i) {
         break;
     }
 }
-if ($industry === null || empty($industry['filters'])) {
+if ($industry === null) {
     fail(400, "Unbekannte Branche: {$industryId}");
+}
+
+$apiKey = getApiKey();
+if ($apiKey === null) {
+    fail(500, 'Google-Places-API-Schlüssel fehlt. Bitte in api/config.php hinterlegen (siehe config.sample.php).');
 }
 
 // --- Ablauf -----------------------------------------------------------------
 
 try {
-    $query = buildOverpassQuery($state, $city, $industry['filters']);
-    $overpassJson = runOverpass($OVERPASS_ENDPOINTS, $query);
-    $leads = extractLeads($overpassJson);
+    $textQuery = ($industry['label'] ?? $industryId) . ' in ' . $city;
+    $places = searchGooglePlaces($apiKey, $textQuery);
+    $leads = extractLeads($places);
 
     $totalFound = count($leads);
     $checkedCount = 0;

@@ -23,92 +23,97 @@ app.get('/api/industries', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Overpass-Abfrage
+// Google Places API (New) — Text Search
 // ---------------------------------------------------------------------------
-const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-];
+const GOOGLE_PLACES_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
+const GOOGLE_FIELD_MASK = [
+  'places.id',
+  'places.displayName',
+  'places.formattedAddress',
+  'places.nationalPhoneNumber',
+  'places.internationalPhoneNumber',
+  'places.websiteUri',
+  'places.location',
+  'nextPageToken',
+].join(',');
 
-// Baut die Overpass-QL-Abfrage: alle Betriebe der gewünschten Branche, die
-// sowohl innerhalb des Bundeslandes (admin_level 4) als auch innerhalb der
-// Stadt liegen. Die doppelte Flächen-Einschränkung (area.state)(area.city)
-// wirkt als Schnittmenge und macht mehrdeutige Städtenamen eindeutig.
-export function buildOverpassQuery(state, city, industry) {
-  const s = escapeOverpass(state);
-  const c = escapeOverpass(city);
-
-  const lines = industry.filters
-    .map((f) => `  nwr${f}(area.state)(area.city);`)
-    .join('\n');
-
-  return `[out:json][timeout:120];
-area["name"="${s}"]["boundary"="administrative"]["admin_level"="4"]->.state;
-area["name"="${c}"]["boundary"="administrative"]->.city;
-(
-${lines}
-);
-out center tags;`;
+// Liefert den API-Schlüssel aus der Umgebungsvariable GOOGLE_PLACES_API_KEY.
+export function getApiKey() {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  return key && key.trim() !== '' ? key.trim() : null;
 }
 
-function escapeOverpass(value) {
-  // Anführungszeichen und Backslashes maskieren, damit die Abfrage nicht bricht.
-  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
+// Sucht Betriebe über die Google Places Text Search (New), inkl. Paginierung.
+async function searchGooglePlaces(apiKey, textQuery, maxPages = 3) {
+  const all = [];
+  let pageToken = null;
 
-async function runOverpass(query) {
-  let lastError;
-  for (const endpoint of OVERPASS_ENDPOINTS) {
+  for (let page = 0; page < maxPages; page++) {
+    const payload = { textQuery, languageCode: 'de', regionCode: 'DE', pageSize: 20 };
+    if (pageToken) payload.pageToken = pageToken;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    let resp;
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 130_000);
-      const resp = await fetch(endpoint, {
+      resp = await fetch(GOOGLE_PLACES_ENDPOINT, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'leadnase/1.0 (lead finder tool)',
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': GOOGLE_FIELD_MASK,
         },
-        body: 'data=' + encodeURIComponent(query),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
+    } finally {
       clearTimeout(timeout);
-      if (!resp.ok) {
-        lastError = new Error(`Overpass ${endpoint} antwortete mit HTTP ${resp.status}`);
-        continue;
-      }
-      return await resp.json();
-    } catch (err) {
-      lastError = err;
     }
+
+    const json = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      const msg = json?.error?.message || `HTTP ${resp.status}`;
+      throw new Error(`Google Places: ${msg}`);
+    }
+    if (!json) throw new Error('Ungültige Antwort von Google Places');
+
+    for (const p of json.places ?? []) all.push(p);
+
+    pageToken = json.nextPageToken ?? null;
+    if (!pageToken) break;
   }
-  throw lastError ?? new Error('Alle Overpass-Endpunkte nicht erreichbar');
+
+  return all;
+}
+
+// Entfernt ein abschließendes ", Deutschland" / ", Germany" aus der Adresse.
+function cleanAddress(addr) {
+  return String(addr || '').replace(/,\s*(Deutschland|Germany)\s*$/u, '');
 }
 
 // ---------------------------------------------------------------------------
-// Betriebe aus dem Overpass-Ergebnis extrahieren
+// Google-Places-Objekte in einheitliche Lead-Datensätze umwandeln
 // ---------------------------------------------------------------------------
-export function extractLeads(overpassJson) {
+export function extractLeads(places) {
   const seen = new Set();
   const leads = [];
 
-  for (const el of overpassJson.elements ?? []) {
-    const tags = el.tags ?? {};
-    const name = tags.name || tags['brand'] || tags['operator'];
+  for (const p of places ?? []) {
+    const name = p.displayName?.text || '';
     if (!name) continue; // Ohne Namen ist ein Lead nicht brauchbar.
 
     // Duplikate (gleicher Name + gleiche Adresse) vermeiden.
-    const address = buildAddress(tags);
+    const address = cleanAddress(p.formattedAddress);
     const key = `${name.toLowerCase()}|${address.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const website = tags.website || tags['contact:website'] || tags.url || tags['contact:url'] || '';
-    const phone = tags.phone || tags['contact:phone'] || tags['contact:mobile'] || '';
-    const email = tags.email || tags['contact:email'] || '';
-
-    const lat = el.lat ?? el.center?.lat;
-    const lon = el.lon ?? el.center?.lon;
+    const website = p.websiteUri || '';
+    const phone = p.nationalPhoneNumber || p.internationalPhoneNumber || '';
+    const email = ''; // Google Places liefert keine E-Mail-Adressen.
+    const lat = p.location?.latitude;
+    const lon = p.location?.longitude;
+    const id = p.id || '';
 
     leads.push({
       name,
@@ -120,17 +125,11 @@ export function extractLeads(overpassJson) {
       websiteStatus: website ? 'unknown' : 'none',
       lat,
       lon,
-      mapsUrl: lat && lon ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=19/${lat}/${lon}` : '',
+      mapsUrl: id ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(id)}` : '',
     });
   }
 
   return leads;
-}
-
-function buildAddress(tags) {
-  const street = [tags['addr:street'], tags['addr:housenumber']].filter(Boolean).join(' ');
-  const cityLine = [tags['addr:postcode'], tags['addr:city']].filter(Boolean).join(' ');
-  return [street, cityLine].filter(Boolean).join(', ');
 }
 
 // ---------------------------------------------------------------------------
@@ -209,10 +208,17 @@ app.post('/api/leads', async (req, res) => {
   }
   const websiteFilter = ['none', 'broken', 'both'].includes(filter) ? filter : 'none';
 
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return res.status(500).json({
+      error: 'Google-Places-API-Schlüssel fehlt. Bitte Umgebungsvariable GOOGLE_PLACES_API_KEY setzen.',
+    });
+  }
+
   try {
-    const query = buildOverpassQuery(state, city, industry);
-    const overpassJson = await runOverpass(query);
-    let leads = extractLeads(overpassJson);
+    const textQuery = `${industry.label} in ${city}`;
+    const places = await searchGooglePlaces(apiKey, textQuery);
+    let leads = extractLeads(places);
 
     const totalFound = leads.length;
 

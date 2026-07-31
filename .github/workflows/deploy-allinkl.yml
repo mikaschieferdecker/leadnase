@@ -45,6 +45,18 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Google-API-Schlüssel in config.php schreiben
+        if: steps.check.outputs.ready == 'true'
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+        run: |
+          if [ -n "$GOOGLE_PLACES_API_KEY" ]; then
+            php -r '$f=getenv("GOOGLE_PLACES_API_KEY"); file_put_contents("deploy-allinkl/api/config.php", "<?php\nreturn [\n    \"google_places_api_key\" => ".var_export($f,true).",\n];\n");'
+            echo "config.php erzeugt."
+          else
+            echo "::warning::GOOGLE_PLACES_API_KEY fehlt — die App kann keine Daten laden, bis das Secret gesetzt ist."
+          fi
+
       - name: Per FTP zu All-Inkl hochladen
         if: steps.check.outputs.ready == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
