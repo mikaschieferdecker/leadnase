@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leadnase — Lead-Finder</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧲</text></svg>" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <div class="brand">
+        <span class="logo">🧲</span>
+        <div>
+          <h1>Leadnase</h1>
+          <p class="tagline">Finde Betriebe ohne oder mit kaputter Webseite</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <form id="search-form">
+        <div class="grid">
+          <label class="field">
+            <span>Bundesland</span>
+            <select id="state" required>
+              <option value="" disabled selected>Bitte wählen…</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Stadt</span>
+            <select id="city" required disabled>
+              <option value="" disabled selected>Erst Bundesland wählen</option>
+            </select>
+            <button type="button" id="custom-city-toggle" class="link-btn">Andere Stadt eingeben</button>
+          </label>
+
+          <label class="field hidden" id="custom-city-field">
+            <span>Stadt (frei)</span>
+            <input type="text" id="custom-city" placeholder="z. B. Ludwigsburg" autocomplete="off" />
+          </label>
+
+          <label class="field">
+            <span>Branche</span>
+            <select id="industry" required disabled>
+              <option value="" disabled selected>Wird geladen…</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset class="filter">
+          <legend>Welche Betriebe suchst du?</legend>
+          <div class="options">
+            <label class="option">
+              <input type="radio" name="filter" value="none" checked />
+              <span class="option-body">
+                <strong>Keine Webseite</strong>
+                <small>Betriebe ohne hinterlegte Webseite</small>
+              </span>
+            </label>
+            <label class="option">
+              <input type="radio" name="filter" value="broken" />
+              <span class="option-body">
+                <strong>Kaputte Webseite</strong>
+                <small>Webseite vorhanden, aber nicht erreichbar</small>
+              </span>
+            </label>
+            <label class="option">
+              <input type="radio" name="filter" value="both" />
+              <span class="option-body">
+                <strong>Beides</strong>
+                <small>Keine ODER kaputte Webseite</small>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <button type="submit" id="submit-btn" class="primary">Leads finden</button>
+      </form>
+    </section>
+
+    <section id="status" class="status hidden"></section>
+
+    <section id="results" class="results hidden">
+      <div class="results-head">
+        <h2 id="results-title"></h2>
+        <button type="button" id="export-btn" class="secondary">Als CSV exportieren</button>
+      </div>
+      <div class="table-scroll">
+        <table id="results-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Adresse</th>
+              <th>Telefon</th>
+              <th>Webseite</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Daten aus <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL). Ergebnisse sind nur so vollständig wie die OSM-Daten.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
