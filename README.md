@@ -28,6 +28,13 @@ Dann im Browser öffnen: <http://localhost:3000>
 
 Port anpassen: `PORT=8080 npm start`
 
+## Auf All-Inkl / PHP-Webhosting betreiben
+
+Für klassisches PHP-Webhosting (z. B. **All-Inkl**) gibt es im Ordner
+[`deploy-allinkl/`](deploy-allinkl/) eine fertige PHP-Variante — kein Node.js
+nötig, einfach per FTP hochladen. Die Anleitung dazu:
+[`deploy-allinkl/README-ALLINKL.md`](deploy-allinkl/README-ALLINKL.md).
+
 ## Projektstruktur
 
 ```
